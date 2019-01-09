@@ -36,7 +36,7 @@ else()
       ${dcmtk_SOURCE_DIR}/dcmdata/include
       ${dcmtk_SOURCE_DIR}/dcmimgle/include
     )
-    set( DCMTK_LIBRARIES dcmtk )
+    set( DCMTK_LIBRARIES vcl dcmdata dcmimgle ofstd )
 
   endif()
 

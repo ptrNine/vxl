@@ -4,7 +4,8 @@
 // \file
 // \author Amitha Perera
 
-#include <dcistrma.h>
+#include <dcmtk/dcmdata/dcistrma.h>
+#include <dcmtk/dcmimgle/didocu.h>
 
 class vil_stream;
 
@@ -18,11 +19,11 @@ class vil_dicom_stream_producer
 
   virtual OFBool good() const;
   virtual OFCondition status() const;
-  virtual OFBool eos() const;
-  virtual Uint32 avail() const;
-  virtual Uint32 read(void *buf, Uint32 buflen);
-  virtual Uint32 skip(Uint32 skiplen);
-  virtual void putback(Uint32 num);
+  virtual OFBool eos();
+  virtual offile_off_t avail();
+  virtual offile_off_t read(void *buf, offile_off_t buflen);
+  virtual offile_off_t skip(offile_off_t skiplen);
+  virtual void putback(offile_off_t num);
 
  private:
   vil_stream* vs_;
@@ -42,6 +43,11 @@ class vil_dicom_stream_factory
   virtual DcmInputStreamFactory* clone() const
   {
     return new vil_dicom_stream_factory(*this);
+  }
+  
+  virtual DcmInputStreamFactoryType ident() const
+  {
+      return DFT_DcmInputFileStreamFactory;
   }
 
  private:

@@ -4,7 +4,7 @@
 
 #include "vil_dicom_stream.h"
 #include <vil/vil_stream.h>
-#include <dcerror.h>
+#include <dcmtk/dcmdata/dcerror.h>
 
 #include <cassert>
 #ifdef _MSC_VER
@@ -47,15 +47,15 @@ status() const
 
 OFBool
 vil_dicom_stream_producer::
-eos() const
+eos()
 {
   return vs_->tell() >= vs_->file_size();
 }
 
 
-Uint32
+offile_off_t
 vil_dicom_stream_producer::
-avail() const
+avail()
 {
   vil_streampos n = vs_->file_size() - vs_->tell();
   assert( n >= 0 );
@@ -63,14 +63,14 @@ avail() const
   //apparently dicom streams only support 32 bit positions
   //whereas vil_streams now support 64 bit positions (when
   //available)
-  assert( n <= (vil_streampos)std::numeric_limits<Uint32>::max() );
-  return (Uint32)n;
+  assert( n <= (vil_streampos)std::numeric_limits<offile_off_t>::max() );
+  return (offile_off_t)n;
 }
 
 
-Uint32
+offile_off_t
 vil_dicom_stream_producer::
-read( void *buf, Uint32 buflen )
+read( void *buf, offile_off_t buflen )
 {
   vil_streampos n = vs_->read( buf, buflen );
   assert( n >= 0 );
@@ -78,14 +78,14 @@ read( void *buf, Uint32 buflen )
   //apparently dicom streams only support 32 bit positions
   //whereas vil_streams now support 64 bit positions (when
   //available)
-  assert( n <= (vil_streampos)std::numeric_limits<Uint32>::max() );
-  return (Uint32)n;
+  assert( n <= (vil_streampos)std::numeric_limits<offile_off_t>::max() );
+  return (offile_off_t)n;
 }
 
 
-Uint32
+offile_off_t
 vil_dicom_stream_producer::
-skip(Uint32 skiplen)
+skip(offile_off_t skiplen)
 {
   vs_->seek( vs_->tell() + skiplen );
   return skiplen;
@@ -94,7 +94,7 @@ skip(Uint32 skiplen)
 
 void
 vil_dicom_stream_producer::
-putback(Uint32 num)
+putback(offile_off_t num)
 {
   vs_->seek( vs_->tell() - (long int)num );
 }

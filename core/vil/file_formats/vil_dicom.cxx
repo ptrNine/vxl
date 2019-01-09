@@ -27,13 +27,13 @@
 #include <vil/vil_pixel_format.h>
 #include <vil/vil_exception.h>
 
-#include <dcfilefo.h>
-#include <dcmetinf.h>
-#include <dcdatset.h>
-#include <dctagkey.h>
-#include <dcdeftag.h>
-#include <dcstack.h>
-#include <diinpxt.h>
+#include <dcmtk/dcmdata/dcfilefo.h>
+#include <dcmtk/dcmdata/dcmetinf.h>
+#include <dcmtk/dcmdata/dcdatset.h>
+#include <dcmtk/dcmdata/dctagkey.h>
+#include <dcmtk/dcmdata/dcdeftag.h>
+#include <dcmtk/dcmdata/dcstack.h>
+#include <dcmtk/dcmimgle/diinpxt.h>
 
 #include "vil_dicom_stream.h"
 //
@@ -105,8 +105,9 @@ read_header( DcmObject* dataset, vil_dicom_header_info& i );
 
 static
 void
-read_pixels_into_buffer(DcmPixelData* pixels,
+read_pixels_into_buffer(DiDocument* doc,
                         unsigned num_samples,
+                        unsigned nplanes,
                         Uint16 alloc,
                         Uint16 stored,
                         Uint16 high,
@@ -115,7 +116,6 @@ read_pixels_into_buffer(DcmPixelData* pixels,
                         Float64 intercept,
                         vil_memory_chunk_sptr& out_buf,
                         vil_pixel_format& out_format);
-
 
 vil_dicom_image::vil_dicom_image(vil_stream* vs)
   : pixels_( 0 )
@@ -199,11 +199,14 @@ vil_dicom_image::vil_dicom_image(vil_stream* vs)
       }
       else {
         assert( stack.top()->ident() == EVR_PixelData );
-        pixels = static_cast<DcmPixelData*>(stack.top());
       }
     }
+
+    DiDocument doc(&dset, EXS_Unknown);
+    pixels = doc.getPixelData();
+
     unsigned num_samples = ni() * nj() * nplanes();
-    read_pixels_into_buffer(pixels, num_samples,
+    read_pixels_into_buffer(&doc, num_samples, nplanes(),
                             bits_alloc, bits_stored, high_bit, pixel_rep,
                             slope, intercept,
                             pixel_buf, pixel_format);
@@ -964,31 +967,33 @@ namespace
 {
   template<class InT>
   void
-  convert_src_type( InT const*,
-                    DcmPixelData* pixels,
-                    unsigned num_samples,
-                    Uint16 alloc,
-                    Uint16 stored,
-                    Uint16 high,
-                    Uint16 rep,
-                    DiInputPixel*& pixel_data,
-                    vil_pixel_format& act_format )
+  convert_src_type(InT const *,
+                   DiDocument *document,
+                   unsigned num_samples,
+                   unsigned nplanes,
+                   Uint16 alloc,
+                   Uint16 stored,
+                   Uint16 high,
+                   Uint16 rep,
+                   DiInputPixel *&pixel_data,
+                   vil_pixel_format &act_format)
   {
+    Uint32 firstFragment = 0;
     if ( rep == 0 && stored <= 8 ) {
       act_format = VIL_PIXEL_FORMAT_BYTE;
-      pixel_data = new DiInputPixelTemplate<InT,Uint8>( pixels, alloc, stored, high, 0, num_samples );
+      pixel_data = new DiInputPixelTemplate<InT,Uint8>( document, alloc, stored, high, 0, num_samples, nplanes, nullptr, firstFragment );
     }
     else if ( rep == 0 && stored <= 16 ) {
       act_format = VIL_PIXEL_FORMAT_UINT_16;
-      pixel_data = new DiInputPixelTemplate<InT,Uint16>( pixels, alloc, stored, high, 0, num_samples );
+      pixel_data = new DiInputPixelTemplate<InT,Uint16>( document, alloc, stored, high, 0, num_samples, nplanes, nullptr, firstFragment );
     }
     else if ( rep == 1 && stored <= 8 ) {
       act_format = VIL_PIXEL_FORMAT_SBYTE;
-      pixel_data = new DiInputPixelTemplate<InT,Sint8>( pixels, alloc, stored, high, 0, num_samples );
+      pixel_data = new DiInputPixelTemplate<InT,Sint8>( document, alloc, stored, high, 0, num_samples, nplanes, nullptr, firstFragment );
     }
     else if ( rep == 1 && stored <= 16 ) {
       act_format = VIL_PIXEL_FORMAT_INT_16;
-      pixel_data = new DiInputPixelTemplate<InT,Sint16>( pixels, alloc, stored, high, 0, num_samples );
+      pixel_data = new DiInputPixelTemplate<InT,Sint16>( document, alloc, stored, high, 0, num_samples, nplanes, nullptr, firstFragment );
     }
   }
 
@@ -1023,8 +1028,9 @@ static void swap_shorts(unsigned short *ip, unsigned short *op, int count)
 #endif //MIXED_ENDIAN
 static
 void
-read_pixels_into_buffer(DcmPixelData* pixels,
+read_pixels_into_buffer(DiDocument* doc,
                         unsigned num_samples,
+                        unsigned nplanes,
                         Uint16 alloc,
                         Uint16 stored,
                         Uint16 high,
@@ -1034,6 +1040,7 @@ read_pixels_into_buffer(DcmPixelData* pixels,
                         vil_memory_chunk_sptr& out_buf,
                         vil_pixel_format& out_format)
 {
+
   // This will be the "true" pixel buffer type after the overlay
   // planes are removed and the pixel bits shifted to the lowest bits
   // of the bytes.
@@ -1045,12 +1052,13 @@ read_pixels_into_buffer(DcmPixelData* pixels,
   // Make sure pixel_data is deleted before this function exits!
   //
   DiInputPixel* pixel_data = 0;
-  if ( pixels->getVR() == EVR_OW ) {
-    convert_src_type( (Uint16*)0, pixels, num_samples, alloc, stored, high, rep, pixel_data, act_format );
+  if ( doc->getPixelData()->getVR() == EVR_OW ) {
+    convert_src_type((Uint16 *) 0, doc, num_samples, nplanes, alloc, stored, high, rep, pixel_data, act_format);
   }
   else {
-    convert_src_type( (Uint8*)0, pixels, num_samples, alloc, stored, high, rep, pixel_data, act_format );
+    convert_src_type((Uint8 *) 0, doc, num_samples, nplanes, alloc, stored, high, rep, pixel_data, act_format);
   }
+
 #ifdef MIXED_ENDIAN
 #ifdef NO_OFFSET
   slope = 1; intercept = 0;
@@ -1072,7 +1080,7 @@ read_pixels_into_buffer(DcmPixelData* pixels,
   }
 
   // The data has been copied and converted. Release the source.
-  pixels->clear();
+  doc->getPixelData()->clear();
 
   // Now, the actual buffer is good, or else we need to rescale
   //
